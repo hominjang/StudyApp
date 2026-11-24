@@ -1,0 +1,86 @@
+{
+  "scope": "문서의 규칙을 구현한 독립 설계 모델. 실제 앱 테스트가 아님",
+  "sqlite_version": "3.33.0",
+  "dataset_count": 2,
+  "question_count": 254,
+  "grading_case_count": 1705,
+  "passed_scenario_count": 17,
+  "scenarios": [
+    {
+      "scenario": "초기 254문항·ID 보존·초기화 재실행",
+      "status": "pass"
+    },
+    {
+      "scenario": "최초 자료 설치 실패의 전체 롤백",
+      "status": "pass"
+    },
+    {
+      "scenario": "실제 자료의 채점 예시 1705건",
+      "status": "pass"
+    },
+    {
+      "scenario": "공백 미응답과 문자열 완전 일치·유니코드 비정규화",
+      "status": "pass"
+    },
+    {
+      "scenario": "늦은 자동 저장 무시·동일 버전 재시도·충돌 검출",
+      "status": "pass"
+    },
+    {
+      "scenario": "제출 최신 답 확정·입력 잠금·완료 전 미채점",
+      "status": "pass"
+    },
+    {
+      "scenario": "완료 직전 장애의 전체 롤백·같은 시험 재시도",
+      "status": "pass"
+    },
+    {
+      "scenario": "완료 반복 요청과 재조회가 집계를 늘리지 않음",
+      "status": "pass"
+    },
+    {
+      "scenario": "오답 후 3회 연속 정답·재오답 편입·중간 오답 초기화",
+      "status": "pass"
+    },
+    {
+      "scenario": "다른 문항 시험과 첫 정답은 오답 연속 횟수에 영향 없음",
+      "status": "pass"
+    },
+    {
+      "scenario": "학습 상태는 사용자별로 분리",
+      "status": "pass"
+    },
+    {
+      "scenario": "완료 순번은 시계 역행과 시험 시작 순서에 독립",
+      "status": "pass"
+    },
+    {
+      "scenario": "원문 변경·삭제 후 질문·답·순서·입력 위치 복원과 과거 채점 유지",
+      "status": "pass"
+    },
+    {
+      "scenario": "자료 갱신 중 실패 롤백·빠진 문항 비활성·재가져오기 재연결",
+      "status": "pass"
+    },
+    {
+      "scenario": "응답의 부모 시험·중복 위치·중복 문항 제약",
+      "status": "pass"
+    },
+    {
+      "scenario": "출제 모드·선택 범위·전체·중복 방지·후보 부족",
+      "status": "pass"
+    },
+    {
+      "scenario": "SQLite Backup API의 임시 백업·재연결 복원",
+      "status": "pass"
+    }
+  ],
+  "not_tested": [
+    "실제 UI",
+    "프레임워크·SQLite 연결 라이브러리",
+    "파일 잠금과 다중 프로세스",
+    "실제 디스크 장애·강제 전원 종료",
+    "JSON 가져오기·내보내기 UI",
+    "앱 DB 마이그레이션 구현"
+  ]
+}

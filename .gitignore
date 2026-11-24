@@ -1,0 +1,28 @@
+# 실제 학습 자료·원문·변환 결과·사용자 기록은 로컬에서만 관리
+/data/
+/local-data/
+
+# 로컬 자료를 복사한 앱 자산과 패키지 산출물
+**/Assets/InitialData/
+**/assets/InitialData/
+**/assets/initial-data/
+**/artifacts/
+**/bin/
+**/obj/
+**/build/
+**/.gradle/
+
+# 실행 중 생성하는 DB와 백업·로그
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+**/backups/
+*.log
+
+# 개발 도구 임시 파일
+.vs/
+**/__pycache__/
+*.pyc

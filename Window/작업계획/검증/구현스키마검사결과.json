@@ -1,0 +1,60 @@
+{
+  "scope": "구현 설계 문서 DDL과 실제 자료를 사용한 임시 SQLite 검사. C# 앱 검증 아님",
+  "schema_source": "Window\\구현설계\\04_1_DB스키마.md",
+  "sqlite_version": "3.33.0",
+  "table_count": 8,
+  "question_count": 254,
+  "passed_scenario_count": 11,
+  "scenarios": [
+    {
+      "scenario": "문서 DDL의 8개 테이블과 실제 254문항·보충·ID·정답·허용 표기 등록",
+      "status": "pass"
+    },
+    {
+      "scenario": "동일 시험의 중복 위치와 중복 문항 거부",
+      "status": "pass"
+    },
+    {
+      "scenario": "응답의 부모 시험과 프로필 외래 키 및 강한 참조 보존",
+      "status": "pass"
+    },
+    {
+      "scenario": "상태·시각·완료 순번·위치·버전·출제 설정 제약",
+      "status": "pass"
+    },
+    {
+      "scenario": "미채점·정답·오답 사유의 조합 제약",
+      "status": "pass"
+    },
+    {
+      "scenario": "사용자별 완료 순번 유일성",
+      "status": "pass"
+    },
+    {
+      "scenario": "오답 대상과 연속 정답 수의 범위·조합 제약",
+      "status": "pass"
+    },
+    {
+      "scenario": "활성 문항 순서 중복 거부와 전체 갱신 시 순서 변경",
+      "status": "pass"
+    },
+    {
+      "scenario": "원본 제거와 독립된 시험 스냅샷·학습 상태 참조",
+      "status": "pass"
+    },
+    {
+      "scenario": "완료 저장 중 롤백의 판정·상태·순번 동시 복원",
+      "status": "pass"
+    },
+    {
+      "scenario": "입력 원문의 공백·탭·Unicode 조합 보존",
+      "status": "pass"
+    }
+  ],
+  "not_tested": [
+    "C# 저장소 구현",
+    "WPF 화면",
+    "Microsoft.Data.Sqlite 연결",
+    "앱 배포 환경"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "scope": "로컬 실제 자료의 ignore와 현재 index의 데이터·복사본·산출물 추적 여부",
+  "checked_local_data_files": 53,
+  "ignored_local_data_files": 53,
+  "ignored_path_probes": 6,
+  "tracked_data_files": 0,
+  "errors": {
+    "not_ignored": [],
+    "tracked_prohibited_paths": []
+  }
+}
