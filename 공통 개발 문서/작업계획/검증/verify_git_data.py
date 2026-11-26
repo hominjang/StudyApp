@@ -18,7 +18,10 @@ def main():
     probes = ['data/initial/catalog.json', 'local-data/import.json',
               'Window/src/StudyApp.Desktop/Assets/InitialData/learning.json',
               'Android/app/src/main/assets/initial-data/learning.json',
-              'Window/artifacts/publish/win-x64/package.zip', 'local-data/study.db']
+              'Window/artifacts/publish/win-x64/package.zip', 'local-data/study.db',
+              'Window/node_modules/test/package.json', 'Window/dist/index.html',
+              'Window/src-tauri/target/release/studyapp.exe',
+              'Window/src-tauri/resources/initial-data/learning.json', '.tools/downloads/node.zip']
     checked = sorted(set(data_files + probes))
     result = git('check-ignore', '--no-index', '-z', '--stdin', input_bytes=('\0'.join(checked)+'\0').encode('utf-8'))
     if result.returncode not in (0, 1):
@@ -30,8 +33,8 @@ def main():
         raise SystemExit(tracked.stderr.decode('utf-8', errors='replace'))
     def prohibited(name):
         parts = Path(name).parts
-        return (name.startswith(('data/', 'local-data/'))
-                or any(p in ('InitialData', 'initial-data', 'artifacts', 'backups', 'bin', 'obj', 'build') for p in parts)
+        return (name.startswith(('data/', 'local-data/', '.tools/'))
+                or any(p in ('InitialData', 'initial-data', 'artifacts', 'backups', 'bin', 'obj', 'build', 'node_modules', 'dist', 'target') for p in parts)
                 or any(name.endswith(s) or s+'-' in name for s in ('.db', '.sqlite', '.sqlite3')))
     tracked_data = [name for name in tracked.stdout.decode('utf-8').split('\0') if name and prohibited(name)]
     report = {'scope': '로컬 실제 자료의 ignore와 현재 index의 데이터·복사본·산출물 추적 여부',

@@ -2,8 +2,10 @@
 import copy
 import json
 import random
+import re
 import sqlite3
 import tempfile
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -26,8 +28,21 @@ def check(name):
     return run
 
 
+# 공통 자동 채점 기준의 미응답 공백 문자: Unicode White_Space 25자
+WHITE_SPACE = frozenset(
+    [chr(c) for c in range(0x09, 0x0E)] + [' ', '\u0085', ' ', ' ']
+    + [chr(c) for c in range(0x2000, 0x200B)] + [' ', ' ', ' ', ' ', '　'])
+assert len(WHITE_SPACE) == 25
+# 공통 식별 기준의 자료·문항 ID 형식
+ID_PATTERN = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*')
+
+
+def is_valid_id(value):
+    return 1 <= len(value) <= 64 and ID_PATTERN.fullmatch(value) is not None
+
+
 def grade(text, answer, aliases):
-    if not text or text.isspace():
+    if all(c in WHITE_SPACE for c in text):
         return 'incorrect', 'unanswered'
     return ('correct', None) if text in [answer, *aliases] else ('incorrect', 'no_match')
 
@@ -200,6 +215,11 @@ def initial_seed():
     m = Model()
     assert m.db.execute('SELECT COUNT(*) FROM items').fetchone()[0] == 254
     assert set(KEYS) == set(map(tuple, m.db.execute('SELECT dataset,id FROM items')))
+    assert all(is_valid_id(part) for key in KEYS for part in key)
+    for bad in ('', 'Upper', 'a_b', 'a--b', '-a', 'a-', 'a b', 'x' * 65):
+        assert not is_valid_id(bad)
+    new_id = str(uuid.uuid4())
+    assert new_id == new_id.lower() and is_valid_id(new_id)
     m.db.execute('UPDATE items SET question=? WHERE dataset=? AND id=?', ('사용자 수정', *KEYS[0]))
     m.install()
     assert m.item(KEYS[0])['question'] == '사용자 수정'
@@ -231,6 +251,10 @@ def actual_grading():
 @check('공백 미응답과 문자열 완전 일치·유니코드 비정규화')
 def exact_strings():
     assert grade(' \t\n', 'ABC', []) == ('incorrect', 'unanswered')
+    for text in ('', '　', ' ', '\u0085', ' ', ''.join(sorted(WHITE_SPACE))):
+        assert grade(text, 'ABC', []) == ('incorrect', 'unanswered')
+    for text in ('\x1c', '\x1f', '​', '﻿', ' ​ '):
+        assert grade(text, 'ABC', []) == ('incorrect', 'no_match')
     for text in ('abc', ' ABC', 'ABC ', 'ABC.', 'AB C'):
         assert grade(text, 'ABC', []) == ('incorrect', 'no_match')
     assert grade('Alias', 'ABC', ['Alias'])[0] == 'correct'

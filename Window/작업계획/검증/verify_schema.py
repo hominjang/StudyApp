@@ -163,10 +163,10 @@ def main():
         assert {r[0] for r in db.execute('SELECT response_text FROM exam_responses')} == {text}
     run('입력 원문의 공백·탭·Unicode 조합 보존', raw_strings)
 
-    report = {'scope':'구현 설계 문서 DDL과 실제 자료를 사용한 임시 SQLite 검사. C# 앱 검증 아님',
+    report = {'scope':'구현 설계 문서 DDL과 실제 자료를 사용한 임시 SQLite 검사. 실제 앱 검증 아님',
               'schema_source':str(SCHEMA_FILE.relative_to(ROOT)), 'sqlite_version':sqlite3.sqlite_version,
               'table_count':8,'question_count':254,'passed_scenario_count':len(results),'scenarios':results,
-              'not_tested':['C# 저장소 구현','WPF 화면','Microsoft.Data.Sqlite 연결','앱 배포 환경']}
+              'not_tested':['Rust 저장소 구현','React·WebView2 화면','rusqlite 연결','앱 배포 환경']}
     (HERE / '구현스키마검사결과.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     print(json.dumps({k:v for k,v in report.items() if k != 'scenarios'},ensure_ascii=False))
 

@@ -1,5 +1,5 @@
 {
-  "scope": "구현 설계 문서 DDL과 실제 자료를 사용한 임시 SQLite 검사. C# 앱 검증 아님",
+  "scope": "구현 설계 문서 DDL과 실제 자료를 사용한 임시 SQLite 검사. 실제 앱 검증 아님",
   "schema_source": "Window\\구현설계\\04_1_DB스키마.md",
   "sqlite_version": "3.33.0",
   "table_count": 8,
@@ -52,9 +52,9 @@
     }
   ],
   "not_tested": [
-    "C# 저장소 구현",
-    "WPF 화면",
-    "Microsoft.Data.Sqlite 연결",
+    "Rust 저장소 구현",
+    "React·WebView2 화면",
+    "rusqlite 연결",
     "앱 배포 환경"
   ]
 }

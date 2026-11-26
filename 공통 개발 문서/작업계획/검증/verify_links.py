@@ -1,6 +1,7 @@
 """프로젝트 설계 문서의 로컬 Markdown 링크만 검사한다."""
 import json
 import re
+import subprocess
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -11,9 +12,11 @@ HERE = Path(__file__).resolve().parent
 def main():
     # 이번 실행이 만드는 보고서로 향하는 링크도 검사할 수 있게 경로를 먼저 만든다.
     (HERE / '문서경로검사결과.json').touch(exist_ok=True)
-    files = [ROOT / 'README.md']
-    for folder in ('Android', 'Window', '공통 개발 문서'):
-        files.extend(sorted((ROOT / folder).rglob('*.md')))
+    listed = subprocess.run(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+                            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    relative_files = set(listed.stdout.decode('utf-8').split('\0'))
+    files = sorted(ROOT / name for name in relative_files if name.endswith('.md')
+                   and (name in ('README.md', 'AGENTS.md') or name.split('/')[0] in ('Android', 'Window', '공통 개발 문서')))
     count = 0
     local_data_count = 0
     missing_local_data_count = 0
@@ -34,7 +37,7 @@ def main():
                 continue
             if not resolved.exists():
                 errors.append({'file': str(path.relative_to(ROOT)), 'target': target})
-    report = {'scope': '루트 README와 Android·Window·공통 문서의 로컬 링크. Git 제외 자료 링크는 별도 집계',
+    report = {'scope': '루트 README·AGENTS와 Android·Window·공통 문서의 로컬 링크. Git 제외 자료 링크는 별도 집계',
               'document_count': len(files), 'local_link_count': count,
               'local_data_link_count': local_data_count,
               'missing_local_data_link_count': missing_local_data_count, 'errors': errors}
