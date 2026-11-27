@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('dev', 'build', 'test', 'preview', 'tauri:dev', 'tauri:build')]
+    [ValidateSet('dev', 'build', 'test', 'preview', 'tauri:dev', 'tauri:build', 'package:exe')]
     [string]$Task = 'dev'
 )
 

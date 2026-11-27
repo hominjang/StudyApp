@@ -16,7 +16,7 @@ try {
   }
   throw new Error('초기 자료 목록을 읽지 못했습니다.');
 }
-if (catalog.schema_version !== '1.0' || !Array.isArray(catalog.datasets) || !catalog.datasets.length) {
+if (!['1.0', '2.0'].includes(catalog.schema_version) || !Array.isArray(catalog.datasets) || !catalog.datasets.length) {
   throw new Error('초기 자료 목록 형식을 확인해주세요.');
 }
 const sourceRoot = await realpath(source);

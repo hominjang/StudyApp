@@ -1,12 +1,15 @@
+import { getExamOutcome } from '../../bridge/outcome';
+import type { ExamOutcome } from '../../bridge/outcome';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { completeExam, describeError, getExamResult, getExamSession, submitExam } from '../../bridge/desktop';
+import { completeExam, describeError, getExamSession, submitExam } from '../../bridge/desktop';
 import type { ExamResult, ExamSession, SubmitExamRequest, ReviewMode } from '../../bridge/desktop';
 import { isUnanswered, showWhitespace } from './rules';
 import { useExamProgress } from './useExamProgress';
+import { AnswerInput } from './AnswerInput';
 
 export type ExamGuard = { prepareToLeave: () => Promise<void> };
-type Props = { session: ExamSession; onDone: (result: ExamResult) => void; onLeave: () => void; guardRef: RefObject<ExamGuard | null> };
+type Props = { session: ExamSession; onDone: (result: ExamOutcome) => void; onLeave: () => void; guardRef: RefObject<ExamGuard | null> };
 
 export function ExamWorkspace({ session, onDone, onLeave, guardRef }: Props) {
   const progress = useExamProgress(session);
@@ -39,7 +42,7 @@ export function ExamWorkspace({ session, onDone, onLeave, guardRef }: Props) {
       coordinator.pause(); await coordinator.flush();
       await submitExam(pending.current);
       await completeExam(session.exam_id);
-      onDone(await getExamResult(session.exam_id));
+      onDone(await getExamOutcome(session));
     } catch (cause) { setError(describeError(cause)); }
     finally { active.current = false; setBusy(false); }
   }
@@ -109,10 +112,8 @@ export function ExamWorkspace({ session, onDone, onLeave, guardRef }: Props) {
         <div className="section-heading"><span className="subtle-tag">문제 {position + 1} / {session.items.length}</span><span className="step-label">{responses.length - unanswered.length}문항 응답</span></div>
         <h2 id="question-heading" className="exam-question">{item.question}</h2>
         <label className="answer-label" htmlFor="exam-answer">내 답변</label>
-        {/* 정답은 한 줄이므로 한 줄 입력을 사용한다. Enter가 줄바꿈으로 답에 들어가지 않고, 제출 단축키도 연결하지 않는다. */}
-        <input id="exam-answer" className="answer-input" type="text" aria-label="내 답변" value={responses[position]} disabled={busy} placeholder="단어나 짧은 문장으로 답해주세요"
-          autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} onChange={(event) => progress.answer(event.target.value)} />
-        <p className="exam-note">정답과 허용 표기에 정확히 맞춰 답해주세요. 정답은 전체 제출 후 공개돼요.</p>
+        <AnswerInput key={position} mode={item.item_type} initialValue={item.response_text} value={responses[position]} disabled={busy} onChange={progress.answer} />
+        <p className="exam-note">{item.item_type === 'descriptive' ? '내 말로 설명해주세요. 전체 제출 후 참고 답안과 비교해 직접 평가해요.' : '정답과 허용 표기에 정확히 맞춰 답해주세요. 정답은 전체 제출 후 공개돼요.'}</p>
         <div className="exam-actions"><button className="secondary-button" disabled={busy || position === 0} onClick={() => progress.move(position - 1)}>이전 문제</button><button className="secondary-button" disabled={busy || position === session.items.length - 1} onClick={() => progress.move(position + 1)}>다음 문제</button></div>
       </section>
       <aside className="exam-panel question-navigation" aria-label="문항 이동">

@@ -63,6 +63,8 @@ pub struct CandidatePreview {
 }
 #[derive(Serialize)]
 pub struct ExamHistoryRow {
+    pub assessment_counts: Option<crate::assessment::AssessmentCounts>,
+    pub assessment_status: Option<String>,
     pub exam_id: String,
     pub status: String,
     pub dataset_titles: Vec<String>,
@@ -75,6 +77,29 @@ pub struct ExamHistoryRow {
     pub correct_count: Option<usize>,
     /// 이 기록만 읽지 못했을 때의 안내. 다른 기록의 조회는 계속한다.
     pub error: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RecordEntry<T> {
+    Exam {
+        row_key: String,
+        #[serde(flatten)]
+        record: T,
+    },
+    Error {
+        row_key: String,
+        error: String,
+    },
+}
+
+impl<T> RecordEntry<T> {
+    pub fn record(&self) -> Option<&T> {
+        match self {
+            Self::Exam { record, .. } => Some(record),
+            Self::Error { .. } => None,
+        }
+    }
 }
 
 /// 후보의 원래 인덱스는 선택한 묶음 순서와 문항 순서다. 난수 공급원은 검사에서 주입한다.
@@ -189,6 +214,7 @@ impl SubmitExamRequest {
 
 #[derive(Clone, Serialize)]
 pub struct SessionItem {
+    pub item_type: String,
     pub position: u32,
     pub dataset_id: String,
     pub item_id: String,
@@ -198,6 +224,7 @@ pub struct SessionItem {
 
 #[derive(Clone, Serialize)]
 pub struct ExamSession {
+    pub db_version: u8,
     pub exam_id: String,
     pub status: String,
     pub revision: u64,

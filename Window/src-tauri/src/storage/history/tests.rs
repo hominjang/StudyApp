@@ -234,14 +234,14 @@ fn history_filters_sort_and_do_not_expose_incomplete_scores_or_answers() {
         .unwrap();
     let all = store.exam_history("all").unwrap();
     assert_eq!(all.len(), 4);
-    assert_eq!(all[0].exam_id, drafting.exam_id);
-    assert_eq!(all[1].exam_id, submitted.exam_id);
-    assert_eq!(all[2].exam_id, newer.exam_id);
-    assert_eq!(all[3].exam_id, old.exam_id);
-    assert_eq!(all[0].correct_count, None);
-    assert_eq!(all[1].correct_count, None);
-    assert_eq!(all[1].answered_count, 1);
-    assert_eq!(all[2].correct_count, Some(2));
+    assert_eq!(all[0].record().unwrap().exam_id, drafting.exam_id);
+    assert_eq!(all[1].record().unwrap().exam_id, submitted.exam_id);
+    assert_eq!(all[2].record().unwrap().exam_id, newer.exam_id);
+    assert_eq!(all[3].record().unwrap().exam_id, old.exam_id);
+    assert_eq!(all[0].record().unwrap().correct_count, None);
+    assert_eq!(all[1].record().unwrap().correct_count, None);
+    assert_eq!(all[1].record().unwrap().answered_count, 1);
+    assert_eq!(all[2].record().unwrap().correct_count, Some(2));
     assert_eq!(store.exam_history("completed").unwrap().len(), 2);
     assert_eq!(store.exam_history("in_progress").unwrap().len(), 1);
     assert_eq!(store.exam_history("submitted").unwrap().len(), 1);
@@ -338,22 +338,89 @@ fn damaged_exam_marks_only_its_row_and_keeps_other_history() {
 
     let all = store.exam_history("all").unwrap();
     assert_eq!(all.len(), 4);
-    let find = |id: &str| all.iter().find(|row| row.exam_id == id).unwrap();
-    assert!(find(&broken_draft.exam_id).error.is_some());
-    assert_eq!(find(&broken_draft.exam_id).status, "in_progress");
-    assert!(find(&broken_result.exam_id).error.is_some());
-    assert!(find(&broken_result.exam_id).correct_count.is_none());
-    assert!(find(&healthy_draft.exam_id).error.is_none());
-    assert_eq!(find(&completed.exam_id).correct_count, Some(2));
-    assert!(find(&completed.exam_id).error.is_none());
-    // 손상 행도 원래 정렬 위치를 유지한다.
-    assert_eq!(all[3].exam_id, completed.exam_id);
-
+    assert_eq!(
+        all.iter().filter(|entry| entry.record().is_none()).count(),
+        2
+    );
+    assert_eq!(all[0].record().unwrap().exam_id, healthy_draft.exam_id);
+    assert_eq!(all[1].record().unwrap().exam_id, completed.exam_id);
+    assert_eq!(all[1].record().unwrap().correct_count, Some(2));
+    assert!(all[2].record().is_none() && all[3].record().is_none());
     let pending = store.pending_exams().unwrap();
     assert_eq!(pending.len(), 2);
-    assert!(pending.iter().any(|p| p.exam_id == broken_draft.exam_id && p.error.is_some()));
-    assert!(pending.iter().any(|p| p.exam_id == healthy_draft.exam_id && p.error.is_none()));
+    assert_eq!(pending[0].record().unwrap().exam_id, healthy_draft.exam_id);
+    assert!(pending[1].record().is_none());
     // 손상된 시험은 그대로 보존하고 다른 시험은 계속 열 수 있다.
     assert!(store.exam_session(&broken_draft.exam_id).is_err());
     assert!(store.exam_session(&healthy_draft.exam_id).is_ok());
+}
+
+#[test]
+fn unreadable_basic_columns_are_isolated_sorted_last_and_do_not_invent_metadata() {
+    for damage in [
+        "completion_order='broken'",
+        "saved_at=X'FF'",
+        "saved_at='not-a-time'",
+        "status='broken'",
+        "exam_id=X'FF'",
+    ] {
+        let (_temp, _paths, mut store) = setup();
+        let good = mark_third(&mut store);
+        let bad = mark_third(&mut store);
+        store
+            .connection
+            .execute_batch("PRAGMA foreign_keys=OFF; PRAGMA ignore_check_constraints=ON;")
+            .unwrap();
+        store
+            .connection
+            .execute(
+                &format!("UPDATE exams SET {damage} WHERE exam_id=?1"),
+                [&bad.exam_id],
+            )
+            .unwrap();
+        let rows = store.exam_history("all").unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].record().unwrap().exam_id, good.exam_id);
+        assert!(rows[1].record().is_none());
+        let dto = serde_json::to_value(&rows[1]).unwrap();
+        assert_eq!(dto["kind"], "error");
+        for field in [
+            "exam_id",
+            "status",
+            "question_count",
+            "saved_at",
+            "completed_at",
+        ] {
+            assert!(dto.get(field).is_none());
+        }
+        assert_eq!(
+            serde_json::to_value(store.exam_history("all").unwrap()).unwrap(),
+            serde_json::to_value(rows).unwrap()
+        );
+    }
+}
+
+#[test]
+fn broken_pending_id_and_timestamp_keep_other_pending_and_dataset_lists_available() {
+    for damage in ["exam_id=X'FF'", "saved_at=X'FF'"] {
+        let (_temp, _paths, mut store) = setup();
+        let bad = store.start_exam(request("general")).unwrap();
+        let good = store.start_exam(request("general")).unwrap();
+        store
+            .connection
+            .execute_batch("PRAGMA foreign_keys=OFF;")
+            .unwrap();
+        store
+            .connection
+            .execute(
+                &format!("UPDATE exams SET {damage} WHERE exam_id=?1"),
+                [&bad.exam_id],
+            )
+            .unwrap();
+        let pending = store.pending_exams().unwrap();
+        assert_eq!(pending.len(), 2);
+        assert_eq!(pending[0].record().unwrap().exam_id, good.exam_id);
+        assert!(pending[1].record().is_none());
+        assert!(!store.list_datasets().unwrap().is_empty());
+    }
 }

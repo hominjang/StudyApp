@@ -35,7 +35,7 @@ pub struct AppStatus {
 }
 
 pub struct Store {
-    connection: Connection,
+    pub(crate) connection: Connection,
     learner_id: String,
 }
 
@@ -319,6 +319,6 @@ impl Store {
 }
 
 mod exams;
-mod history;
+pub(crate) mod history;
 #[cfg(test)]
 mod tests;

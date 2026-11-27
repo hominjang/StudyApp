@@ -128,58 +128,68 @@ pub fn validate_package(package: &Package) -> AppResult<()> {
         }
     }
     if let Some(supplement) = &package.supplement {
-        if supplement.schema_version != "1.0" || supplement.dataset_id != data.dataset_id {
-            return Err(AppError::validation("supplement.schema_version/dataset_id"));
+        validate_supplement(supplement, "1.0", &data.dataset_id, &ids)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_supplement(
+    supplement: &Supplement,
+    version: &str,
+    dataset_id: &str,
+    ids: &HashSet<&str>,
+) -> AppResult<()> {
+    if supplement.schema_version != version || supplement.dataset_id != dataset_id {
+        return Err(AppError::validation("supplement.schema_version/dataset_id"));
+    }
+    if supplement
+        .dataset_metadata
+        .as_ref()
+        .is_some_and(|value| !value.is_object())
+    {
+        return Err(AppError::validation("supplement.dataset_metadata"));
+    }
+    let mut seen = HashSet::new();
+    for (index, value) in supplement.items.iter().enumerate() {
+        let id = value
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| AppError::validation(format!("supplement.items[{index}].id")))?;
+        if !is_valid_id(id) || !ids.contains(id) || !seen.insert(id) {
+            return Err(AppError::validation(format!(
+                "supplement.items[{index}].id"
+            )));
         }
-        if supplement
-            .dataset_metadata
-            .as_ref()
-            .is_some_and(|value| !value.is_object())
-        {
-            return Err(AppError::validation("supplement.dataset_metadata"));
-        }
-        let mut seen = HashSet::new();
-        for (index, value) in supplement.items.iter().enumerate() {
-            let id = value
-                .get("id")
-                .and_then(Value::as_str)
-                .ok_or_else(|| AppError::validation(format!("supplement.items[{index}].id")))?;
-            if !is_valid_id(id) || !ids.contains(id) || !seen.insert(id) {
+        for key in ["explanation", "example", "caution", "category"] {
+            if value.get(key).is_some_and(|v| !v.is_string()) {
                 return Err(AppError::validation(format!(
-                    "supplement.items[{index}].id"
+                    "supplement.items[{index}].{key}"
                 )));
             }
-            for key in ["explanation", "example", "caution", "category"] {
-                if value.get(key).is_some_and(|v| !v.is_string()) {
+        }
+        for key in ["tags", "sources"] {
+            if let Some(values) = value.get(key) {
+                if !values
+                    .as_array()
+                    .is_some_and(|values| values.iter().all(Value::is_string))
+                {
                     return Err(AppError::validation(format!(
                         "supplement.items[{index}].{key}"
                     )));
                 }
             }
-            for key in ["tags", "sources"] {
-                if let Some(values) = value.get(key) {
-                    if !values
-                        .as_array()
-                        .is_some_and(|values| values.iter().all(Value::is_string))
-                    {
-                        return Err(AppError::validation(format!(
-                            "supplement.items[{index}].{key}"
-                        )));
-                    }
-                }
-            }
-            // 원문 ID를 보존하며 source_refs에는 자료·문항 ID 정규식을 적용하지 않는다.
-            if let Some(refs) = value.get("source_refs") {
-                if !refs.as_array().is_some_and(|refs| {
-                    refs.iter().all(|r| {
-                        r.get("dataset_id").is_some_and(Value::is_string)
-                            && r.get("item_id").is_some_and(Value::is_string)
-                    })
-                }) {
-                    return Err(AppError::validation(format!(
-                        "supplement.items[{index}].source_refs"
-                    )));
-                }
+        }
+        // 원문 ID를 보존하며 source_refs에는 자료·문항 ID 정규식을 적용하지 않는다.
+        if let Some(refs) = value.get("source_refs") {
+            if !refs.as_array().is_some_and(|refs| {
+                refs.iter().all(|r| {
+                    r.get("dataset_id").is_some_and(Value::is_string)
+                        && r.get("item_id").is_some_and(Value::is_string)
+                })
+            }) {
+                return Err(AppError::validation(format!(
+                    "supplement.items[{index}].source_refs"
+                )));
             }
         }
     }

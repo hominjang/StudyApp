@@ -1,12 +1,17 @@
+import { getExamOutcome, isMixedResult } from './bridge/outcome';
+import type { ExamOutcome } from './bridge/outcome';
+import { MixedResultWorkspace } from './features/exam/MixedResultWorkspace';
 import { useEffect, useRef, useState } from 'react';
-import { describeError, getAppStatus, listDatasets, startExam, listPendingExams, getExamSession, getExamResult, watchCloseRequest, previewCandidates } from './bridge/desktop';
-import type { AppStatus, DatasetSummary, ExamSession, ExamResult, StartExamRequest, PendingExam, CandidatePreview, HistoryFilter } from './bridge/desktop';
+import { describeError, getAppStatus, listDatasets, startExam, listPendingExams, getExamSession, watchCloseRequest, previewCandidates } from './bridge/desktop';
+import type { AppStatus, DatasetSummary, ExamSession, StartExamRequest, PendingExam, CandidatePreview, HistoryFilter } from './bridge/desktop';
 import { ExamWorkspace, ResultWorkspace } from './features/exam/ExamWorkspace';
 import type { ExamGuard } from './features/exam/ExamWorkspace';
 import { PendingExams } from './features/exam/PendingExams';
 import { HistoryWorkspace } from './features/exam/HistoryWorkspace';
+import { ImportWorkspace } from './features/exam/ImportWorkspace';
+import { StudyWorkspace } from './features/exam/StudyWorkspace';
 
-type Page = 'study' | 'history';
+type Page = 'study' | 'history' | 'import' | 'read';
 type ReviewMode = 'general' | 'wrong_first' | 'wrong_only';
 
 export function App() {
@@ -22,13 +27,14 @@ export function App() {
   const [order, setOrder] = useState<'random' | 'ordered'>('random');
   const [review, setReview] = useState<ReviewMode>('general');
   const [exam, setExam] = useState<ExamSession | null>(null);
-  const [result, setResult] = useState<ExamResult | null>(null);
+  const [result, setResult] = useState<ExamOutcome | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const startRequest = useRef<{ key: string; request: StartExamRequest } | null>(null);
   const startActive = useRef(false);
   const [pendingExams, setPendingExams] = useState<PendingExam[]>([]);
   const [pendingError, setPendingError] = useState<string | null>(null);
+  const [assessing, setAssessing] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
@@ -41,7 +47,7 @@ export function App() {
   const candidateKey = JSON.stringify([selectedIds, review, retry]);
 
   function navigate(next: Page) {
-    if (exam || starting || resuming) return;
+    if (exam || starting || resuming || assessing) return;
     if (result) { setResult(null); setRetry((value) => value + 1); }
     setPage(next); setStartError(null);
   }
@@ -64,7 +70,7 @@ export function App() {
     try {
       // 이어 풀기와 결과 보기는 학습 시작 화면에 입력해 둔 설정을 바꾸지 않는다.
       const saved = await getExamSession(id);
-      if (saved.status === 'completed') setResult(await getExamResult(id)); else setExam(saved);
+      if (saved.status === 'completed') setResult(await getExamOutcome(saved)); else setExam(saved);
       setPage('study');
     } catch (cause) { setStartError(describeError(cause)); }
     finally { resumeActive.current = false; setResuming(false); }
@@ -150,20 +156,22 @@ export function App() {
         </a>
         <div className="nav-label">WORKSPACE</div>
         <nav aria-label="주 메뉴">
-          <button disabled={!!exam || starting} className={page === 'study' ? 'nav-item active' : 'nav-item'} aria-current={page === 'study' ? 'page' : undefined} onClick={() => navigate('study')}><span aria-hidden="true">▦</span> 학습 시작</button>
-          <button disabled={!!exam || starting} className={page === 'history' ? 'nav-item active' : 'nav-item'} aria-current={page === 'history' ? 'page' : undefined} onClick={() => navigate('history')}><span aria-hidden="true">◷</span> 시험 기록</button>
+          <button disabled={!!exam || starting || resuming || assessing} className={page === 'read' ? 'nav-item active' : 'nav-item'} aria-current={page === 'read' ? 'page' : undefined} onClick={() => navigate('read')}><span aria-hidden="true">▤</span> 자료 학습</button>
+          <button disabled={!!exam || starting || resuming || assessing} className={page === 'study' ? 'nav-item active' : 'nav-item'} aria-current={page === 'study' ? 'page' : undefined} onClick={() => navigate('study')}><span aria-hidden="true">▦</span> 시험 시작</button>
+          <button disabled={!!exam || starting || assessing} className={page === 'history' ? 'nav-item active' : 'nav-item'} aria-current={page === 'history' ? 'page' : undefined} onClick={() => navigate('history')}><span aria-hidden="true">◷</span> 시험 기록</button>
+          <button disabled={!!exam || starting || resuming || assessing} className={page === 'import' ? 'nav-item active' : 'nav-item'} aria-current={page === 'import' ? 'page' : undefined} onClick={() => navigate('import')}><span aria-hidden="true">＋</span> 자료 추가</button>
         </nav>
         <div className="sidebar-note"><span className="status-dot" /> 내 PC의 학습 공간<p>선택한 자료로 배우고,<br />나의 속도로 반복하세요.</p></div>
       </aside>
 
       <main>
-        <header className="topbar"><span>내 학습 공간 <span className="breadcrumb">/ {result ? '시험 결과' : exam ? '문제 풀이' : page === 'study' ? '학습 시작' : '시험 기록'}</span></span><span className="preview-tag">{exam ? '시험 진행 중' : status?.storage === 'ready' ? '내 PC에 저장됨' : '화면 미리보기'}</span></header>
+        <header className="topbar"><span>내 학습 공간 <span className="breadcrumb">/ {result ? '시험 결과' : exam ? '문제 풀이' : page === 'study' ? '시험 시작' : page === 'read' ? '자료 학습' : page === 'import' ? '자료 추가' : '시험 기록'}</span></span><span className="preview-tag">{exam ? '시험 진행 중' : status?.storage === 'ready' ? '내 PC에 저장됨' : '화면 미리보기'}</span></header>
         {closing && <div className="close-notice" role="status">최신 저장 상태를 확인한 뒤 창을 닫고 있어요…</div>}
         {closeError && <div className="error-banner" role="alert">{closeError}</div>}
         <div className="page-content" inert={closing}>
           {connectionError && <div className="error-banner" role="alert">{connectionError} <button onClick={() => setRetry((value) => value + 1)}>다시 확인</button></div>}
           {startError && !exam && <div role="alert" className="error-banner">{startError}</div>}
-          {result ? <ResultWorkspace result={result} onPrepare={prepareAgain} onHistory={() => navigate('history')} /> : exam ? <ExamWorkspace key={exam.exam_id} session={exam} guardRef={examGuard} onLeave={() => { setExam(null); setResult(null); setRetry((value) => value + 1); setPage('study'); }} onDone={(completed) => { setResult(completed); setExam(null); setRetry((value) => value + 1); }} /> : page === 'study' ? <>
+          {result ? isMixedResult(result) ? <MixedResultWorkspace result={result} onUpdate={setResult} onPrepare={prepareAgain} onHistory={() => navigate('history')} onBusy={setAssessing} guardRef={examGuard} /> : <ResultWorkspace result={result} onPrepare={prepareAgain} onHistory={() => navigate('history')} /> : exam ? <ExamWorkspace key={exam.exam_id} session={exam} guardRef={examGuard} onLeave={() => { setExam(null); setResult(null); setRetry((value) => value + 1); setPage('study'); }} onDone={(completed) => { setResult(completed); setExam(null); setRetry((value) => value + 1); }} /> : page === 'study' ? <>
             <div className="page-heading"><div className="eyebrow">YOUR NEXT STEP</div><h1>오늘은 무엇을 배워볼까요?</h1><p>학습할 자료와 출제 방식을 선택해 나만의 시험을 준비하세요.</p></div>
             {setupNotice && <div className="setup-notice" role="status">{setupNotice}</div>}
             {!loading && pendingError && <div className="error-banner" role="alert">이어 풀 시험 목록을 불러오지 못했어요. {pendingError} <button onClick={() => setRetry((value) => value + 1)}>다시 확인</button></div>}
@@ -190,7 +198,7 @@ export function App() {
                 <div className="start-area"><button className="primary-button" disabled={!closeReady || starting || loading || candidateLoading || !!candidateError || !!connectionError || status?.storage !== 'ready' || selected.length === 0 || availableCount === 0 || invalidCount} onClick={beginExam}>{starting ? '시험 준비 중…' : '시험 시작'} <span aria-hidden="true">→</span></button><p>{selected.length === 0 ? '먼저 학습할 자료를 선택해주세요.' : '선택한 조건으로 새 시험을 시작해요.'}</p></div>
               </section>
             </div>
-          </> : <HistoryWorkspace ready={status?.storage === 'ready' && !connectionError} refresh={retry} filter={historyFilter} onFilter={setHistoryFilter} busy={resuming || starting || !closeReady} onOpen={resumeExam} />}
+          </> : page === 'read' ? <StudyWorkspace ready={!loading && status?.storage === 'ready' && !connectionError} datasets={datasets} refresh={retry} onBusy={setAssessing} guardRef={examGuard} /> : page === 'import' ? <ImportWorkspace ready={status?.storage === 'ready' && !connectionError && closeReady} onBusy={setAssessing} guardRef={examGuard} onImported={(imported) => { setSelectedIds([imported.dataset_id]); setSetupNotice(imported.changed ? `자료 ${imported.question_count}문항을 저장했어요. 학습 범위를 확인하고 시험을 시작하세요.` : '현재 자료와 같아 중복 추가하지 않았어요.'); setRetry((value) => value + 1); setPage('study'); }} /> : <HistoryWorkspace ready={status?.storage === 'ready' && !connectionError} refresh={retry} filter={historyFilter} onFilter={setHistoryFilter} busy={resuming || starting || !closeReady} onOpen={resumeExam} />}
           <footer>한 걸음씩, 쌓이는 학습.</footer>
         </div>
       </main>

@@ -27,6 +27,40 @@ fn snapshot(id: &str, revision: u64) -> SubmitExamRequest {
 }
 
 #[test]
+fn legacy_line_endings_survive_save_reopen_submit_and_result() {
+    let (_temp, paths, mut store, session) = setup();
+    let mut request = snapshot(&session.exam_id, 1);
+    request.responses = vec!["A\r\nB".into(), "A\rB".into(), "\n".into()];
+    store.save_progress(request.clone()).unwrap();
+    drop(store);
+    let mut reopened = Store::open(&paths).unwrap();
+    let restored = reopened.exam_session(&session.exam_id).unwrap();
+    for (item, expected) in restored.items.iter().zip(&request.responses) {
+        assert_eq!(&item.response_text, expected);
+    }
+    reopened.submit_exam(request.clone()).unwrap();
+    reopened.complete_exam(&session.exam_id).unwrap();
+    let result = reopened.exam_result(&session.exam_id).unwrap();
+    for (item, expected) in result.items.iter().zip(&request.responses) {
+        assert_eq!(&item.response_text, expected);
+        assert_eq!(item.judgement, "incorrect");
+    }
+    assert_eq!(result.unanswered_count, 1);
+    assert_eq!(
+        result.items[0].incorrect_reason.as_deref(),
+        Some("no_match")
+    );
+    assert_eq!(
+        result.items[1].incorrect_reason.as_deref(),
+        Some("no_match")
+    );
+    assert_eq!(
+        result.items[2].incorrect_reason.as_deref(),
+        Some("unanswered")
+    );
+}
+
+#[test]
 fn newer_save_wins_and_equal_revision_must_have_identical_content() {
     let (_temp, _paths, mut store, session) = setup();
     let request = snapshot(&session.exam_id, 2);
@@ -92,8 +126,8 @@ fn saved_progress_reopens_without_source_and_keeps_snapshot_order() {
     );
     let pending = reopened.pending_exams().unwrap();
     assert_eq!(pending.len(), 1);
-    assert_eq!(pending[0].answered_count, 2);
-    assert_eq!(pending[0].current_position, 2);
+    assert_eq!(pending[0].record().unwrap().answered_count, 2);
+    assert_eq!(pending[0].record().unwrap().current_position, 2);
     let dto = serde_json::to_value(&pending).unwrap();
     for key in ["items", "question", "answer", "responses", "response_text"] {
         assert!(dto[0].get(key).is_none());
@@ -155,7 +189,7 @@ fn pending_submitted_exam_can_finish_after_restart_exactly_once() {
     let mut reopened = Store::open(&paths).unwrap();
     let pending = reopened.pending_exams().unwrap();
     assert_eq!(pending.len(), 1);
-    assert_eq!(pending[0].status, "submitted");
+    assert_eq!(pending[0].record().unwrap().status, "submitted");
     assert_eq!(
         reopened.exam_result(&session.exam_id).err().unwrap().code,
         "InvalidState"

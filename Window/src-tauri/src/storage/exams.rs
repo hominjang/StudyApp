@@ -1,7 +1,7 @@
 use super::*;
 use crate::exam::{
-    self, ExamResult, ExamSession, PendingExam, ResultItem, SaveProgressResult, SessionItem,
-    StartExamRequest, SubmitExamRequest,
+    self, ExamResult, ExamSession, ResultItem, SaveProgressResult, SessionItem, StartExamRequest,
+    SubmitExamRequest,
 };
 use crate::validation::{is_unanswered, is_valid_answer};
 
@@ -33,6 +33,7 @@ pub(super) fn session(db: &Connection, learner: &str, id: &str) -> AppResult<Exa
     let items = statement
         .query_map([id], |r| {
             Ok(SessionItem {
+                item_type: "short_answer".into(),
                 position: r.get(0)?,
                 dataset_id: r.get(1)?,
                 item_id: r.get(2)?,
@@ -56,6 +57,7 @@ pub(super) fn session(db: &Connection, learner: &str, id: &str) -> AppResult<Exa
         return Err(AppError::inconsistent());
     }
     Ok(ExamSession {
+        db_version: 1,
         exam_id: id.into(),
         status: row.1,
         revision: row.2 as u64,
@@ -74,57 +76,6 @@ pub(super) fn session(db: &Connection, learner: &str, id: &str) -> AppResult<Exa
 }
 
 impl Store {
-    pub fn pending_exams(&mut self) -> AppResult<Vec<PendingExam>> {
-        let tx = self
-            .connection
-            .transaction_with_behavior(TransactionBehavior::Deferred)?;
-        let rows = {
-            let mut statement=tx.prepare("SELECT exam_id,status,saved_at FROM exams WHERE learner_id=?1 AND status IN ('in_progress','submitted') ORDER BY saved_at DESC,exam_id")?;
-            let rows = statement
-                .query_map([&self.learner_id], |r| {
-                    Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, String>(1)?,
-                        r.get::<_, String>(2)?,
-                    ))
-                })?
-                .collect::<Result<Vec<_>, _>>()?;
-            rows
-        };
-        let mut result = Vec::new();
-        for (id, status, saved_at) in rows {
-            // 손상된 시험 하나가 목록 전체와 학습 시작 화면을 막지 않도록 해당 행에만 오류를 표시한다.
-            result.push(match session(&tx, &self.learner_id, &id) {
-                Ok(saved) => PendingExam {
-                    exam_id: id,
-                    status: saved.status,
-                    dataset_titles: saved.dataset_titles,
-                    question_count: saved.items.len(),
-                    answered_count: saved
-                        .items
-                        .iter()
-                        .filter(|i| !is_unanswered(&i.response_text))
-                        .count(),
-                    current_position: saved.current_position,
-                    saved_at,
-                    error: None,
-                },
-                Err(error) => PendingExam {
-                    exam_id: id,
-                    status,
-                    dataset_titles: Vec::new(),
-                    question_count: 0,
-                    answered_count: 0,
-                    current_position: 0,
-                    saved_at,
-                    error: Some(error.message),
-                },
-            });
-        }
-        tx.commit()?;
-        Ok(result)
-    }
-
     pub fn save_progress(&mut self, request: SubmitExamRequest) -> AppResult<SaveProgressResult> {
         let tx = self
             .connection

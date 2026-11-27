@@ -40,8 +40,9 @@ export type StartExamRequest = {
   exam_id: string; dataset_ids: string[]; count_mode: 'count' | 'all'; count: number | null;
   order_mode: 'random' | 'ordered'; review_mode: ReviewMode;
 };
-export type SessionItem = { position: number; dataset_id: string; item_id: string; question: string; response_text: string };
+export type SessionItem = { item_type: 'short_answer' | 'descriptive'; position: number; dataset_id: string; item_id: string; question: string; response_text: string };
 export type ExamSession = {
+  db_version: 1 | 2;
   exam_id: string; status: 'in_progress' | 'submitted' | 'completed'; revision: number;
   current_position: number; settings: StartExamRequest; dataset_titles: string[]; items: SessionItem[];
 };
@@ -63,16 +64,19 @@ export const completeExam = (examId: string) => invoke<ExamSession>('complete_ex
 export const getExamResult = (examId: string) => invoke<ExamResult>('get_exam_result', { examId });
 
 export type SaveProgressResult = { outcome: 'saved' | 'already_saved' | 'stale' | 'locked'; revision: number; status: ExamSession['status'] };
-export type PendingExam = { exam_id: string; status: 'in_progress' | 'submitted'; dataset_titles: string[]; question_count: number; answered_count: number; current_position: number; saved_at: string; error: string | null };
+export type RecordIssue = { kind: 'error'; row_key: string; error: string };
+export type PendingExam = RecordIssue | { kind: 'exam'; row_key: string; exam_id: string; status: 'in_progress' | 'submitted'; dataset_titles: string[]; question_count: number; answered_count: number; current_position: number; saved_at: string; error: null };
 export const saveProgress = (request: SubmitExamRequest) => invoke<SaveProgressResult>('save_progress', { request });
 export const listPendingExams = async () => isTauri() ? invoke<PendingExam[]>('list_pending_exams') : [];
 
 export type CandidatePreview = { candidate_count: number; total_count: number; review_target_count: number };
-export type HistoryFilter = 'all' | 'in_progress' | 'submitted' | 'completed';
-export type ExamHistoryRow = {
+export type HistoryFilter = 'all' | 'in_progress' | 'submitted' | 'completed' | 'assessment_pending';
+export type ExamHistoryRow = RecordIssue | { kind: 'exam'; row_key: string;
+  assessment_counts?: { correct: number; partial: number; incorrect: number; ungraded: number } | null;
+  assessment_status?: 'pending' | 'complete' | null;
   exam_id: string; status: ExamSession['status']; dataset_titles: string[]; question_count: number;
   answered_count: number; current_position: number; saved_at: string; completed_at: string | null;
-  completion_order: number | null; correct_count: number | null; error: string | null;
+  completion_order: number | null; correct_count: number | null; error: null;
 };
 export const previewCandidates = (datasetIds: string[], reviewMode: ReviewMode) => invoke<CandidatePreview>('preview_candidates', { request: { dataset_ids: datasetIds, review_mode: reviewMode } });
 export const listExamHistory = (filter: HistoryFilter) => invoke<ExamHistoryRow[]>('list_exam_history', { filter });

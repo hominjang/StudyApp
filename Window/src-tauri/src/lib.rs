@@ -1,12 +1,19 @@
+pub mod assessment;
 mod error;
 mod exam;
+mod import_file;
+pub mod learning_format;
+pub mod migration;
 mod package;
+mod runtime_store;
 mod storage;
+mod study_material;
+mod transfer;
 mod validation;
 mod worker;
 
 use error::{AppError, AppResult};
-use exam::{CandidatePreview, CandidateRequest, ExamHistoryRow};
+use exam::{CandidatePreview, CandidateRequest, ExamHistoryRow, RecordEntry};
 use exam::{
     ExamResult, ExamSession, PendingExam, SaveProgressResult, StartExamRequest, SubmitExamRequest,
 };
@@ -14,6 +21,113 @@ use std::path::PathBuf;
 use storage::{AppPaths, AppStatus, DatasetSummary};
 use tauri::Manager;
 use worker::DbWorker;
+
+#[tauri::command]
+async fn update_study_material(
+    state: tauri::State<'_, DbWorker>,
+    request: transfer::EditMaterialRequest,
+) -> AppResult<transfer::EditMaterialResult> {
+    let worker = state.inner().clone();
+    run_db(move || worker.edit_material(request)).await
+}
+
+#[tauri::command]
+async fn browse_study_materials(
+    state: tauri::State<'_, DbWorker>,
+    request: study_material::StudyRequest,
+) -> AppResult<study_material::StudyPage> {
+    let worker = state.inner().clone();
+    run_db(move || worker.study_materials(request)).await
+}
+
+#[tauri::command]
+async fn choose_import_file(
+    window: tauri::WebviewWindow,
+    kind: String,
+) -> AppResult<Option<import_file::SelectedImportFile>> {
+    if !matches!(kind.as_str(), "learning" | "supplement") {
+        return Err(AppError::validation("file_kind"));
+    }
+    #[cfg(windows)]
+    {
+        let owner = window.hwnd().map_err(|_| AppError::inconsistent())?.0 as isize;
+        run_db(move || {
+            std::thread::spawn(move || import_file::select(owner, &kind))
+                .join()
+                .map_err(|_| {
+                    AppError::new(
+                        "FileReadFailure",
+                        "자료 선택을 완료하지 못했어요. 다시 시도해주세요.",
+                        true,
+                    )
+                })?
+        })
+        .await
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        Err(AppError::new(
+            "UnsupportedPlatform",
+            "Windows 앱에서 파일을 선택해주세요.",
+            false,
+        ))
+    }
+}
+
+#[tauri::command]
+async fn preview_import(
+    state: tauri::State<'_, DbWorker>,
+    request: transfer::ImportRequest,
+) -> AppResult<transfer::ImportPreview> {
+    let worker = state.inner().clone();
+    run_db(move || worker.preview_import(request)).await
+}
+#[tauri::command]
+async fn apply_import(
+    state: tauri::State<'_, DbWorker>,
+    token: String,
+) -> AppResult<transfer::ImportResult> {
+    let worker = state.inner().clone();
+    run_db(move || worker.apply_import(token)).await
+}
+
+use assessment::{
+    AddReviewRequest, AssessmentView, FoundationLink, MutationResult, SetAssessmentRequest,
+};
+#[tauri::command]
+async fn get_foundation_links(
+    state: tauri::State<'_, DbWorker>,
+    exam_id: String,
+    position: u32,
+) -> AppResult<Vec<FoundationLink>> {
+    let worker = state.inner().clone();
+    run_db(move || worker.foundation_links(exam_id, position)).await
+}
+#[tauri::command]
+async fn get_assessment_view(
+    state: tauri::State<'_, DbWorker>,
+    exam_id: String,
+) -> AppResult<AssessmentView> {
+    let worker = state.inner().clone();
+    run_db(move || worker.assessment_view(exam_id)).await
+}
+#[tauri::command]
+async fn set_response_assessment(
+    state: tauri::State<'_, DbWorker>,
+    request: SetAssessmentRequest,
+) -> AppResult<MutationResult> {
+    let worker = state.inner().clone();
+    run_db(move || worker.set_assessment(request)).await
+}
+#[tauri::command]
+async fn add_review_target(
+    state: tauri::State<'_, DbWorker>,
+    request: AddReviewRequest,
+) -> AppResult<MutationResult> {
+    let worker = state.inner().clone();
+    run_db(move || worker.add_review(request)).await
+}
 
 #[tauri::command]
 async fn preview_candidates(
@@ -27,7 +141,7 @@ async fn preview_candidates(
 async fn list_exam_history(
     state: tauri::State<'_, DbWorker>,
     filter: String,
-) -> AppResult<Vec<ExamHistoryRow>> {
+) -> AppResult<Vec<RecordEntry<ExamHistoryRow>>> {
     let worker = state.inner().clone();
     run_db(move || worker.exam_history(filter)).await
 }
@@ -96,7 +210,9 @@ async fn save_progress(
     run_db(move || worker.save_progress(request)).await
 }
 #[tauri::command]
-async fn list_pending_exams(state: tauri::State<'_, DbWorker>) -> AppResult<Vec<PendingExam>> {
+async fn list_pending_exams(
+    state: tauri::State<'_, DbWorker>,
+) -> AppResult<Vec<RecordEntry<PendingExam>>> {
     let worker = state.inner().clone();
     run_db(move || worker.pending_exams()).await
 }
@@ -167,6 +283,15 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            update_study_material,
+            browse_study_materials,
+            choose_import_file,
+            preview_import,
+            apply_import,
+            get_foundation_links,
+            get_assessment_view,
+            set_response_assessment,
+            add_review_target,
             get_app_status,
             list_datasets,
             start_exam,
